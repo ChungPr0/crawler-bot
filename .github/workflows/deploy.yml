@@ -1,0 +1,107 @@
+name: CI/CD Pipeline - Hanoi IT Job Radar Bot
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # =======================================
+  # Stage 1: Build & Push Docker Image
+  # =======================================
+  cd-build-push:
+    name: Build & Push Docker Image (GHCR)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_name: ${{ steps.repo_lower.outputs.image_name }}
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Convert Repository Name to Lowercase
+        id: repo_lower
+        run: |
+          IMAGE="ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          echo "IMAGE_NAME=${IMAGE}" >> $GITHUB_ENV
+          echo "image_name=${IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry (ghcr.io)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t "${IMAGE_NAME}:latest" -t "${IMAGE_NAME}:${{ github.sha }}" .
+          docker push "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:${{ github.sha }}"
+
+  # =======================================
+  # Stage 2: Deploy to VPS via SSH
+  # =======================================
+  cd-deploy:
+    name: Deploy Container to VPS
+    needs: [cd-build-push]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Execute Deployment on VPS via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          IMAGE_NAME: ${{ needs.cd-build-push.outputs.image_name }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          envs: GITHUB_TOKEN,GITHUB_ACTOR,IMAGE_NAME
+          script: |
+            set -e
+            APP_DIR="/opt/crawler-bot"
+            IMAGE_NAME="${IMAGE_NAME:-ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')}"
+
+            echo "==> [1/4] Truy cap thu muc $APP_DIR..."
+            cd "$APP_DIR"
+
+            echo "==> [2/4] Dang nhap GHCR va keo Docker Image da build san ve VPS..."
+            if [ -n "$GITHUB_TOKEN" ]; then
+              echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin || true
+            fi
+            docker pull "${IMAGE_NAME}:latest"
+
+            echo "==> [3/4] Khoi dong lai Container voi gioi han RAM & Swap an toan..."
+            docker stop hanoi-it-job-radar || true && docker rm hanoi-it-job-radar || true
+
+            docker run -d \
+              --name hanoi-it-job-radar \
+              --restart unless-stopped \
+              -m 450m \
+              --memory-swap 1500m \
+              --cpus="0.75" \
+              --env-file "$APP_DIR/.env" \
+              -e TZ=Asia/Ho_Chi_Minh \
+              -e PYTHONUNBUFFERED=1 \
+              -v "$APP_DIR/data:/app/data" \
+              -v "$APP_DIR/logs:/app/logs" \
+              -v "$APP_DIR/cookies:/app/cookies:ro" \
+              --log-opt max-size=10m \
+              --log-opt max-file=3 \
+              "${IMAGE_NAME}:latest"
+
+            echo "==> [4/4] Don dep image cu de giai phong o cung VPS..."
+            docker image prune -f
+
+            echo "==> DEPLOY HOAN TAT! Kiem tra container sau 5s:"
+            sleep 5
+            docker ps --filter "name=hanoi-it-job-radar"
+            docker logs --tail 20 hanoi-it-job-radar

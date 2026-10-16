@@ -1,0 +1,75 @@
+# ==============================================================================
+# PYTHON & PACKAGING
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==============================================================================
+# VIRTUAL ENVIRONMENTS
+# ==============================================================================
+venv/
+.venv/
+env/
+ENV/
+
+# ==============================================================================
+# SECRETS, CREDENTIALS & COOKIES (NEVER COMMIT)
+# ==============================================================================
+.env
+.env.local
+.env.production
+!.env.example
+
+cookies/*.json
+!cookies/cookies.json.example
+
+# ==============================================================================
+# DATABASE & LOGS (LOCAL RUNTIME DATA)
+# ==============================================================================
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/*.sqlite
+data/*
+
+logs/*.log
+logs/*.zip
+logs/*
+
+# ==============================================================================
+# PLAYWRIGHT & DEBUG ARTIFACTS
+# ==============================================================================
+test-results/
+playwright-report/
+playwright/.cache/
+debug_*.html
+
+# ==============================================================================
+# IDEs, EDITORS & OS METADATA
+# ==============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
