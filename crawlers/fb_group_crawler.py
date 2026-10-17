@@ -12,6 +12,11 @@ from utils.logger import logger
 from utils.user_agents import get_random_user_agent
 
 
+class CookieAuthError(Exception):
+    """Exception raised when Facebook rejects cookies or forces redirect to login/checkpoint."""
+    pass
+
+
 class FBGroupCrawler:
     """Crawler specialized for scraping IT Recruitment Facebook Groups using Playwright & saved cookies."""
 
@@ -132,6 +137,9 @@ class FBGroupCrawler:
                         group_jobs = await self._crawl_group(context, group_url.strip())
                         jobs.extend(group_jobs)
                         await asyncio.sleep(2.0)
+                    except CookieAuthError:
+                        logger.error(f"[{self.name}] 🛑 Dừng quét các nhóm còn lại trong chu kỳ này do phiên đăng nhập đã hỏng (tiết kiệm CPU & RAM).")
+                        break
                     except Exception as ge:
                         logger.error(f"[{self.name}] Error while processing group '{group_url}': {ge}")
             finally:
@@ -174,7 +182,7 @@ class FBGroupCrawler:
                     f"Facebook yêu cầu xác minh bảo mật. URL: {page.url} | Title: '{page_title}'. "
                     "Hãy đăng nhập nick này trên trình duyệt máy tính để xác minh rồi xuất lại cookie."
                 )
-                return []
+                raise CookieAuthError("Account checkpointed")
 
             login_form = await page.query_selector("input[name='email'], input#email")
             if is_login_url or is_login_title or login_form:
@@ -184,7 +192,7 @@ class FBGroupCrawler:
                     f"Cookie trong '{self.cookies_path}' đã hết hạn hoặc bị Facebook hủy phiên đăng nhập. "
                     "Vui lòng xuất lại cookie mới."
                 )
-                return []
+                raise CookieAuthError("Cookie invalid or session expired")
 
             if is_unavailable:
                 logger.warning(
