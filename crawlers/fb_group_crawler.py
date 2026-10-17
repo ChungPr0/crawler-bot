@@ -24,13 +24,18 @@ class FBGroupCrawler:
             else [settings.FB_GROUP_URLS]
         )
         self.headless = settings.PLAYWRIGHT_HEADLESS
+        self.user_agent = getattr(
+            settings,
+            "FB_USER_AGENT",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        )
 
     def _load_and_sanitize_cookies(self) -> List[dict]:
         """Load and sanitize cookie format for Playwright context."""
         if not self.cookies_path.exists():
             logger.warning(
-                f"[{self.name}] Cookies file not found at '{self.cookies_path}'. "
-                "Facebook crawl will proceed without login session (may have limited visibility)."
+                f"[{self.name}] ⚠️ Cookies file not found at '{self.cookies_path}'. "
+                "Facebook crawl will proceed without login session (Facebook blocks unauthenticated access to groups)."
             )
             return []
 
@@ -50,16 +55,28 @@ class FBGroupCrawler:
                 same_site = str(c.get("sameSite", "")).lower()
                 if same_site in ("strict", "lax"):
                     cookie_dict["sameSite"] = same_site.capitalize()
-                elif same_site == "none" or same_site == "no_restriction":
+                elif same_site in ("none", "no_restriction"):
                     cookie_dict["sameSite"] = "None"
                     cookie_dict["secure"] = True
 
-                if "expires" in c and isinstance(c["expires"], (int, float)):
-                    cookie_dict["expires"] = float(c["expires"])
+                # Support both 'expires' and 'expirationDate' (used by Cookie-Editor)
+                expires_val = c.get("expires") or c.get("expirationDate")
+                if expires_val and isinstance(expires_val, (int, float)):
+                    cookie_dict["expires"] = float(expires_val)
 
                 sanitized.append(cookie_dict)
 
-            logger.info(f"[{self.name}] Loaded {len(sanitized)} cookies successfully.")
+            # Check presence of vital Facebook authentication cookies
+            cookie_names = {c.get("name") for c in sanitized}
+            has_auth = "c_user" in cookie_names and "xs" in cookie_names
+            if not has_auth:
+                logger.warning(
+                    f"[{self.name}] ⚠️ Cookies file loaded, but missing essential session cookies ('c_user' or 'xs'). "
+                    "Make sure you were fully logged in when exporting cookies!"
+                )
+            else:
+                logger.info(f"[{self.name}] Loaded {len(sanitized)} cookies successfully (session cookies 'c_user' & 'xs' verified).")
+
             return sanitized
         except Exception as e:
             logger.error(f"[{self.name}] Error reading cookies file: {e}")
@@ -86,9 +103,10 @@ class FBGroupCrawler:
                 ],
             )
 
+            # Use consistent desktop User-Agent to avoid session invalidation
             context: BrowserContext = await browser.new_context(
-                user_agent=get_random_user_agent(),
-                viewport={"width": 1024, "height": 800},
+                user_agent=self.user_agent,
+                viewport={"width": 1280, "height": 900},
                 locale="vi-VN",
                 timezone_id="Asia/Ho_Chi_Minh",
             )
@@ -140,6 +158,50 @@ class FBGroupCrawler:
             await page.goto(group_url, wait_until="domcontentloaded", timeout=45000)
             await asyncio.sleep(3.5)
 
+            current_url = page.url.lower()
+            page_title = await page.title()
+            logger.info(f"[{self.name}] Page landed: '{page_title}' | URL: {page.url}")
+
+            # 1. Cookie & Session Health Check: Detect redirection to Login or Checkpoint
+            is_checkpoint = "checkpoint" in current_url
+            is_login_url = any(term in current_url for term in ["login", "recover", "help"])
+            is_login_title = any(term in page_title.lower() for term in ["đăng nhập", "log in", "login"])
+            is_unavailable = any(term in page_title.lower() for term in ["không khả dụng", "isn't available", "not found", "lỗi"])
+
+            if is_checkpoint:
+                logger.error(
+                    f"[{self.name}] ❌ TÀI KHOẢN BỊ CHECKPOINT! "
+                    f"Facebook yêu cầu xác minh bảo mật. URL: {page.url} | Title: '{page_title}'. "
+                    "Hãy đăng nhập nick này trên trình duyệt máy tính để xác minh rồi xuất lại cookie."
+                )
+                return []
+
+            login_form = await page.query_selector("input[name='email'], input#email")
+            if is_login_url or is_login_title or login_form:
+                logger.error(
+                    f"[{self.name}] ❌ LỖI COOKIE: Facebook chuyển hướng về trang Đăng nhập! "
+                    f"URL thực tế: {page.url} | Title: '{page_title}'. "
+                    f"Cookie trong '{self.cookies_path}' đã hết hạn hoặc bị Facebook hủy phiên đăng nhập. "
+                    "Vui lòng xuất lại cookie mới."
+                )
+                return []
+
+            if is_unavailable:
+                logger.warning(
+                    f"[{self.name}] ⚠️ NHÓM KHÔNG TRUY CẬP ĐƯỢC: {group_url} | Title: '{page_title}'. "
+                    "Nhóm có thể là nhóm riêng tư (cần tham gia nhóm bằng nick này trước) hoặc URL bị sai."
+                )
+                return []
+
+            # Dismiss modal popup/dialog if Facebook displays "Xem thêm trên Facebook" overlay
+            close_btn = await page.query_selector("div[aria-label='Đóng'], div[aria-label='Close']")
+            if close_btn:
+                try:
+                    await close_btn.click(timeout=1000)
+                    await asyncio.sleep(0.5)
+                except Exception:
+                    pass
+
             # Scroll gently to trigger lazy rendering of recent posts
             for _ in range(2):
                 await page.mouse.wheel(0, 800)
@@ -156,9 +218,26 @@ class FBGroupCrawler:
                 except Exception:
                     pass
 
-            # Target post message text elements
-            text_divs = await page.query_selector_all("div[role='feed'] div[dir='auto'], div[role='article'] div[dir='auto']")
+            # Target post message text elements across various Facebook group layouts
+            post_selectors = (
+                "div[data-ad-preview='message'], "
+                "div[data-ad-comet-preview='message'], "
+                "div[role='feed'] div[dir='auto'], "
+                "div[role='article'] div[dir='auto']"
+            )
+            text_divs = await page.query_selector_all(post_selectors)
             logger.info(f"[{self.name}] Found {len(text_divs)} potential text blocks in {group_url}")
+
+            # If 0 text blocks found, log visible page text snippet (0 disk/RAM overhead, no screenshot needed)
+            if not text_divs:
+                try:
+                    body_text = (await page.inner_text("body"))[:150].replace("\n", " ").strip()
+                except Exception:
+                    body_text = "N/A"
+                logger.warning(
+                    f"[{self.name}] ⚠️ Đã mở trang ('{page_title}') nhưng tìm thấy 0 bài viết. "
+                    f"Nội dung hiển thị trên trang: '{body_text}'"
+                )
 
             seen_signatures = set()
 

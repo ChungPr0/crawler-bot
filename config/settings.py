@@ -39,6 +39,10 @@ class Settings(BaseSettings):
         description="Facebook recruitment group URLs to scrape",
     )
     PLAYWRIGHT_HEADLESS: bool = Field(default=True, description="Run Playwright browser in headless mode")
+    FB_USER_AGENT: str = Field(
+        default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        description="Fixed User-Agent for Facebook crawler to match exported cookies",
+    )
 
     # Filter Engine Keywords (Configurable via .env)
     TECH_KEYWORDS: Union[List[str], str] = Field(
