@@ -231,16 +231,16 @@ class FBGroupCrawler:
                 except Exception:
                     pass
 
-            # Scroll gently to trigger lazy rendering of recent posts
-            for _ in range(2):
-                await page.mouse.wheel(0, 800)
-                await asyncio.sleep(2)
+            # Scroll to trigger lazy rendering of recent posts (expanded depth)
+            for _ in range(4):
+                await page.mouse.wheel(0, 1500)
+                await asyncio.sleep(2.5)
 
             # Expand 'Xem thêm' / 'See more' buttons to reveal full recruitment descriptions
             see_more_buttons = await page.query_selector_all(
                 "div[role='button']:has-text('Xem thêm'), div[role='button']:has-text('See more')"
             )
-            for btn in see_more_buttons[:6]:
+            for btn in see_more_buttons[:12]:
                 try:
                     await btn.click(timeout=1000)
                     await asyncio.sleep(0.3)

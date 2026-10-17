@@ -78,8 +78,8 @@ class JobAutomationEngine:
                     job.matched_level = eval_result.matched_level
                     job.matched_location = eval_result.matched_location
 
-                    # 2. Database Deduplication check
-                    if await self.repository.is_job_exists(job.job_id):
+                    # 2. Database Deduplication check (checks job_id AND exact title+company)
+                    if await self.repository.is_job_exists(job.job_id, job.title, job.company):
                         logger.debug(f"[{crawler.name}] Duplicate job skipped: ID {job.job_id} ({job.title})")
                         continue
 

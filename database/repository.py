@@ -40,14 +40,28 @@ class JobRepository:
             await db.commit()
             logger.info(f"Database initialized successfully at {self.db_path}")
 
-    async def is_job_exists(self, job_id: str) -> bool:
-        """Check whether a given job_id has already been processed and saved."""
+    async def is_job_exists(
+        self, job_id: str, title: Optional[str] = None, company: Optional[str] = None
+    ) -> bool:
+        """Check whether a job already exists by job_id OR by identical (title, company)."""
         async with aiosqlite.connect(self.db_path) as db:
+            # 1. Primary check by job_id
             async with db.execute(
                 "SELECT 1 FROM jobs WHERE job_id = ? LIMIT 1;", (job_id,)
             ) as cursor:
-                row = await cursor.fetchone()
-                return row is not None
+                if await cursor.fetchone() is not None:
+                    return True
+
+            # 2. Secondary check by exact (title, company)
+            if title and company:
+                async with db.execute(
+                    "SELECT 1 FROM jobs WHERE title = ? AND company = ? LIMIT 1;",
+                    (title.strip(), company.strip()),
+                ) as cursor:
+                    if await cursor.fetchone() is not None:
+                        return True
+
+            return False
 
     async def save_job(self, job: JobItem) -> bool:
         """
