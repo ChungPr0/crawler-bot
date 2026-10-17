@@ -283,7 +283,7 @@ class FBGroupCrawler:
                     // 2. Extract direct post permalink from all links within this article or ancestors up to feed
                     let postUrl = '';
                     let curr = art;
-                    for (let level = 0; level < 8 && curr; level++) {
+                    for (let level = 0; level < 12 && curr; level++) {
                         const links = Array.from(curr.querySelectorAll("a[href]"));
                         for (const a of links) {
                             const href = a.href || '';
@@ -303,6 +303,13 @@ class FBGroupCrawler:
                                 const match = href.match(/story_fbid=([^&]+)/);
                                 if (match) {
                                     postUrl = `https://www.facebook.com/permalink.php?story_fbid=${match[1]}`;
+                                    break;
+                                }
+                            }
+                            if (href.includes('set=gm.') || href.includes('set=pcb.')) {
+                                const match = href.match(/set=(?:gm|pcb)\.([0-9]+)/);
+                                if (match) {
+                                    postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
                                     break;
                                 }
                             }
@@ -344,10 +351,11 @@ class FBGroupCrawler:
                     if post_url and not post_url.endswith("/") and ("/posts/" in post_url or "/permalink/" in post_url or "/share/p/" in post_url):
                         post_url = f"{post_url}/"
 
-                    # Fallback to group URL with hash only if no direct permalink was found
+                    # Discard candidate block if no valid direct post permalink was found
+                    # (Strictly eliminates group headers, rules, 'About this group' cards from being sent with #post_...)
                     if not post_url:
-                        text_hash = hashlib.md5(post_text[:120].encode("utf-8")).hexdigest()[:12]
-                        post_url = f"{group_url.rstrip('/')}#post_{text_hash}"
+                        logger.debug(f"[{self.name}] Discarded block without post permalink: '{post_text[:50]}...'")
+                        continue
 
                     # Avoid duplicate posts by URL across all groups in this cycle
                     if post_url in seen_urls:
