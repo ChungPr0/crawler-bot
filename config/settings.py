@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """Application configuration loaded from environment variables or .env file."""
 
     # Scheduling
-    CHECK_INTERVAL_MINUTES: int = Field(default=15, description="Interval in minutes between crawl cycles")
+    CHECK_INTERVAL_MINUTES: int = Field(default=120, description="Interval in minutes between crawl cycles")
 
     # Notifications - Discord
     DISCORD_WEBHOOK_URL: str = Field(default="", description="Discord Webhook URL")

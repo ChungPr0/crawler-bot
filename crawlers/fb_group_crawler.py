@@ -157,13 +157,20 @@ class FBGroupCrawler:
 
     async def _crawl_group(self, context: BrowserContext, group_url: str) -> List[JobItem]:
         """Navigate to a Facebook Group URL and extract the newest job posts."""
-        logger.info(f"[{self.name}] Opening group: {group_url}")
+        # Force Facebook to display posts chronologically (Newest first) instead of "Most Relevant"
+        if "sorting_setting=" not in group_url:
+            delimiter = "&" if "?" in group_url else "?"
+            target_url = f"{group_url.rstrip('/')}/{delimiter}sorting_setting=CHRONOLOGICAL"
+        else:
+            target_url = group_url
+
+        logger.info(f"[{self.name}] Opening group: {target_url}")
         page: Page = await context.new_page()
         group_jobs: List[JobItem] = []
 
         try:
             # Navigate to group with timeout
-            await page.goto(group_url, wait_until="domcontentloaded", timeout=45000)
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=45000)
             await asyncio.sleep(3.5)
 
             current_url = page.url.lower()
@@ -245,40 +252,49 @@ class FBGroupCrawler:
                         const dirElements = art.querySelectorAll("div[dir='auto']");
                         for (const d of dirElements) {
                             const t = (d.innerText || '').trim();
-                            if (t.length >= 45 && !t.includes("Xem thêm") && !t.includes("See more")) {
+                            if (t.length >= 35) {
                                 postText = t;
                                 break;
                             }
                         }
                     }
                     
-                    if (!postText || postText.length < 45) return;
+                    if (!postText || postText.length < 35) return;
+
+                    // Clean out inline "Xem thêm" / "See more" fragments from text
+                    postText = postText.replace(/Xem thêm/g, '').replace(/See more/g, '').trim();
+                    if (postText.length < 35) return;
                     
-                    // 2. Extract direct post permalink from all links within this article
+                    // 2. Extract direct post permalink from all links within this article or ancestors up to feed
                     let postUrl = '';
-                    const links = Array.from(art.querySelectorAll("a[href]"));
-                    for (const a of links) {
-                        const href = a.href || '';
-                        // Direct group post: /groups/.../posts/<id>/ or /permalink/<id>/
-                        if (href.includes('/posts/') || href.includes('/permalink/')) {
-                            // Strip Facebook tracking parameters (?__cft__=...&__tn__=...)
-                            postUrl = href.split('?')[0].split('&')[0];
-                            break;
-                        }
-                        if (href.includes('multi_permalinks=')) {
-                            const match = href.match(/multi_permalinks=([0-9]+)/);
-                            if (match) {
-                                postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
+                    let curr = art;
+                    for (let level = 0; level < 8 && curr; level++) {
+                        const links = Array.from(curr.querySelectorAll("a[href]"));
+                        for (const a of links) {
+                            const href = a.href || '';
+                            // Direct group post: /groups/.../posts/<id>/, /permalink/<id>/, or share link /share/p/<id>/
+                            if (href.includes('/posts/') || href.includes('/permalink/') || href.includes('/share/p/') || href.includes('/share/g/')) {
+                                postUrl = href.split('?')[0].split('&')[0].split('#')[0];
                                 break;
                             }
-                        }
-                        if (href.includes('story_fbid=')) {
-                            const match = href.match(/story_fbid=([^&]+)/);
-                            if (match) {
-                                postUrl = `https://www.facebook.com/permalink.php?story_fbid=${match[1]}`;
-                                break;
+                            if (href.includes('multi_permalinks=')) {
+                                const match = href.match(/multi_permalinks=([0-9]+)/);
+                                if (match) {
+                                    postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
+                                    break;
+                                }
+                            }
+                            if (href.includes('story_fbid=')) {
+                                const match = href.match(/story_fbid=([^&]+)/);
+                                if (match) {
+                                    postUrl = `https://www.facebook.com/permalink.php?story_fbid=${match[1]}`;
+                                    break;
+                                }
                             }
                         }
+                        if (postUrl) break;
+                        if (curr.getAttribute && curr.getAttribute('role') === 'feed') break;
+                        curr = curr.parentElement;
                     }
                     
                     results.push({
@@ -289,7 +305,7 @@ class FBGroupCrawler:
                 return results;
             }''')
 
-            logger.info(f"[{self.name}] Found {len(extracted_posts)} potential posts in {group_url}")
+            logger.info(f"[{self.name}] Found {len(extracted_posts)} potential posts in {target_url}")
 
             # If 0 posts found, log visible page text snippet (0 disk/RAM overhead)
             if not extracted_posts:
@@ -310,8 +326,11 @@ class FBGroupCrawler:
                     post_text = item.get("text", "").strip()
                     post_url = item.get("url", "").strip()
 
-                    if not post_text or len(post_text) < 45:
+                    if not post_text or len(post_text) < 35:
                         continue  # Skip short non-job UI texts
+
+                    if post_url and not post_url.endswith("/") and ("/posts/" in post_url or "/permalink/" in post_url or "/share/p/" in post_url):
+                        post_url = f"{post_url}/"
 
                     # Fallback to group URL with hash only if no direct permalink was found
                     if not post_url:
