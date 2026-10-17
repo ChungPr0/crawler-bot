@@ -27,7 +27,31 @@ class Settings(BaseSettings):
     # Crawler Toggles
     ENABLE_ITVIEC: bool = Field(default=True, description="Toggle ITviec crawler")
     ENABLE_TOPCV: bool = Field(default=True, description="Toggle TopCV crawler")
+    ENABLE_JOBGO: bool = Field(default=True, description="Toggle JobsGO crawler")
     ENABLE_FACEBOOK: bool = Field(default=True, description="Toggle Facebook Group crawler")
+
+    # Search Endpoints (Configurable via .env)
+    ITVIEC_SEARCH_ENDPOINTS: Union[List[str], str] = Field(
+        default_factory=lambda: [
+            "https://itviec.com/it-jobs/java/ha-noi",
+            "https://itviec.com/it-jobs/backend/ha-noi",
+            "https://itviec.com/it-jobs/frontend/ha-noi",
+            "https://itviec.com/it-jobs/devops/ha-noi",
+        ],
+        description="ITviec search endpoints",
+    )
+    TOPCV_SEARCH_ENDPOINTS: Union[List[str], str] = Field(
+        default_factory=lambda: [
+            "https://www.topcv.vn/tim-viec-lam-it-phan-mem-c10026?city=1&exp=0",
+        ],
+        description="TopCV search endpoints",
+    )
+    JOBGO_SEARCH_ENDPOINTS: Union[List[str], str] = Field(
+        default_factory=lambda: [
+            "https://jobsgo.vn/viec-lam-cong-nghe-thong-tin-tai-ha-noi.html",
+        ],
+        description="JobsGO search endpoints",
+    )
 
     # Facebook Crawler Specifics
     FB_COOKIES_PATH: str = Field(default="cookies/cookies.json", description="Path to Facebook exported cookies JSON")
@@ -82,6 +106,9 @@ class Settings(BaseSettings):
 
     @field_validator(
         "FB_GROUP_URLS",
+        "ITVIEC_SEARCH_ENDPOINTS",
+        "TOPCV_SEARCH_ENDPOINTS",
+        "JOBGO_SEARCH_ENDPOINTS",
         "TECH_KEYWORDS",
         "LEVEL_KEYWORDS",
         "BLACKLIST_KEYWORDS",
@@ -102,6 +129,22 @@ class Settings(BaseSettings):
                         items.append(clean)
             return items
         return v
+
+    @field_validator("FB_GROUP_URLS", mode="after")
+    @classmethod
+    def normalize_facebook_groups(cls, v):
+        """Allows users to specify group ID/name only (e.g. 'internvietnam' or '123456') or full URLs."""
+        normalized = []
+        for item in v:
+            clean = str(item).strip().rstrip("/;")
+            if not clean:
+                continue
+            if clean.startswith("http://") or clean.startswith("https://"):
+                normalized.append(clean)
+            else:
+                slug = clean.split("groups/")[-1].strip("/")
+                normalized.append(f"https://www.facebook.com/groups/{slug}/")
+        return normalized
 
     model_config = SettingsConfigDict(
         env_file=".env",

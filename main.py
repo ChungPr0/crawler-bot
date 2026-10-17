@@ -7,7 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from config.settings import settings
-from crawlers import ITViecCrawler, TopCVCrawler, FBGroupCrawler
+from crawlers import ITViecCrawler, TopCVCrawler, JobGOCrawler, FBGroupCrawler
 from database.repository import JobRepository
 from filters.filter_engine import JobFilter
 from notifiers.notifier_manager import NotifierManager
@@ -33,6 +33,8 @@ class JobAutomationEngine:
             self.crawlers.append(ITViecCrawler())
         if settings.ENABLE_TOPCV:
             self.crawlers.append(TopCVCrawler())
+        if settings.ENABLE_JOBGO:
+            self.crawlers.append(JobGOCrawler())
         if settings.ENABLE_FACEBOOK:
             self.crawlers.append(FBGroupCrawler())
 

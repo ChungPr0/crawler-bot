@@ -8,6 +8,7 @@ from utils.logger import logger
 SOURCE_COLORS = {
     "itviec": 0x2ECC71,   # Emerald Green
     "topcv": 0xE67E22,    # TopCV Orange
+    "jobsgo": 0x9B59B6,   # JobsGO Purple
     "facebook": 0x1877F2, # Facebook Blue
 }
 DEFAULT_COLOR = 0x3498DB   # Default Blue

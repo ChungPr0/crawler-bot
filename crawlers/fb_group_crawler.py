@@ -172,9 +172,9 @@ class FBGroupCrawler:
 
             # 1. Cookie & Session Health Check: Detect redirection to Login or Checkpoint
             is_checkpoint = "checkpoint" in current_url
-            is_login_url = any(term in current_url for term in ["login", "recover", "help"])
-            is_login_title = any(term in page_title.lower() for term in ["đăng nhập", "log in", "login"])
-            is_unavailable = any(term in page_title.lower() for term in ["không khả dụng", "isn't available", "not found", "lỗi"])
+            is_login_url = "/login" in current_url or "login.php" in current_url
+            is_login_title = any(term in page_title.lower() for term in ["đăng nhập", "log in to facebook", "facebook – log in", "facebook - log in"])
+            is_unavailable = any(term in page_title.lower() for term in ["không khả dụng", "isn't available", "not found"])
 
             if is_checkpoint:
                 logger.error(
@@ -184,8 +184,7 @@ class FBGroupCrawler:
                 )
                 raise CookieAuthError("Account checkpointed")
 
-            login_form = await page.query_selector("input[name='email'], input#email")
-            if is_login_url or is_login_title or login_form:
+            if is_login_url or is_login_title:
                 logger.error(
                     f"[{self.name}] ❌ LỖI COOKIE: Facebook chuyển hướng về trang Đăng nhập! "
                     f"URL thực tế: {page.url} | Title: '{page_title}'. "
@@ -226,18 +225,74 @@ class FBGroupCrawler:
                 except Exception:
                     pass
 
-            # Target post message text elements across various Facebook group layouts
-            post_selectors = (
-                "div[data-ad-preview='message'], "
-                "div[data-ad-comet-preview='message'], "
-                "div[role='feed'] div[dir='auto'], "
-                "div[role='article'] div[dir='auto']"
-            )
-            text_divs = await page.query_selector_all(post_selectors)
-            logger.info(f"[{self.name}] Found {len(text_divs)} potential text blocks in {group_url}")
+            # Extract posts with both content AND exact direct permalinks via browser DOM evaluation
+            extracted_posts = await page.evaluate(r'''() => {
+                const results = [];
+                let articles = Array.from(document.querySelectorAll("div[role='feed'] > div, div[role='article']"));
+                if (articles.length === 0) {
+                    articles = Array.from(document.querySelectorAll("div[data-ad-preview='message'], div[data-ad-comet-preview='message']")).map(
+                        el => el.closest("div[role='feed'] > div") || el
+                    );
+                }
+                
+                articles.forEach(art => {
+                    // 1. Extract post text content
+                    let postText = '';
+                    const msgElem = art.querySelector("div[data-ad-preview='message'], div[data-ad-comet-preview='message']");
+                    if (msgElem) {
+                        postText = (msgElem.innerText || '').trim();
+                    } else {
+                        const dirElements = art.querySelectorAll("div[dir='auto']");
+                        for (const d of dirElements) {
+                            const t = (d.innerText || '').trim();
+                            if (t.length >= 45 && !t.includes("Xem thêm") && !t.includes("See more")) {
+                                postText = t;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!postText || postText.length < 45) return;
+                    
+                    // 2. Extract direct post permalink from all links within this article
+                    let postUrl = '';
+                    const links = Array.from(art.querySelectorAll("a[href]"));
+                    for (const a of links) {
+                        const href = a.href || '';
+                        // Direct group post: /groups/.../posts/<id>/ or /permalink/<id>/
+                        if (href.includes('/posts/') || href.includes('/permalink/')) {
+                            // Strip Facebook tracking parameters (?__cft__=...&__tn__=...)
+                            postUrl = href.split('?')[0].split('&')[0];
+                            break;
+                        }
+                        if (href.includes('multi_permalinks=')) {
+                            const match = href.match(/multi_permalinks=([0-9]+)/);
+                            if (match) {
+                                postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
+                                break;
+                            }
+                        }
+                        if (href.includes('story_fbid=')) {
+                            const match = href.match(/story_fbid=([^&]+)/);
+                            if (match) {
+                                postUrl = `https://www.facebook.com/permalink.php?story_fbid=${match[1]}`;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    results.push({
+                        text: postText,
+                        url: postUrl
+                    });
+                });
+                return results;
+            }''')
 
-            # If 0 text blocks found, log visible page text snippet (0 disk/RAM overhead, no screenshot needed)
-            if not text_divs:
+            logger.info(f"[{self.name}] Found {len(extracted_posts)} potential posts in {group_url}")
+
+            # If 0 posts found, log visible page text snippet (0 disk/RAM overhead)
+            if not extracted_posts:
                 try:
                     body_text = (await page.inner_text("body"))[:150].replace("\n", " ").strip()
                 except Exception:
@@ -248,14 +303,26 @@ class FBGroupCrawler:
                 )
 
             seen_signatures = set()
+            seen_urls = set()
 
-            for elem in text_divs:
+            for item in extracted_posts:
                 try:
-                    post_text = (await elem.inner_text()).strip()
+                    post_text = item.get("text", "").strip()
+                    post_url = item.get("url", "").strip()
+
                     if not post_text or len(post_text) < 45:
                         continue  # Skip short non-job UI texts
 
-                    # Avoid parsing duplicates within the same group feed
+                    # Fallback to group URL with hash only if no direct permalink was found
+                    if not post_url:
+                        text_hash = hashlib.md5(post_text[:120].encode("utf-8")).hexdigest()[:12]
+                        post_url = f"{group_url.rstrip('/')}#post_{text_hash}"
+
+                    # Avoid duplicate posts within the same group feed
+                    if post_url in seen_urls:
+                        continue
+                    seen_urls.add(post_url)
+
                     sig = post_text[:70].lower()
                     if sig in seen_signatures:
                         continue
@@ -267,9 +334,6 @@ class FBGroupCrawler:
                     if len(derived_title) > 90:
                         derived_title = derived_title[:87] + "..."
 
-                    # Try to find link from nearby elements or parent article
-                    text_hash = hashlib.md5(post_text[:120].encode("utf-8")).hexdigest()[:12]
-                    post_url = f"{group_url.rstrip('/')}#post_{text_hash}"
                     post_id = hashlib.md5(f"fb:{post_url}".encode("utf-8")).hexdigest()
 
                     job = JobItem(

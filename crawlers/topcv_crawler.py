@@ -26,6 +26,11 @@ class TopCVCrawler:
     def __init__(self):
         self.name = "TopCV"
         self.headless = settings.PLAYWRIGHT_HEADLESS
+        self.search_endpoints = (
+            settings.TOPCV_SEARCH_ENDPOINTS
+            if isinstance(settings.TOPCV_SEARCH_ENDPOINTS, list)
+            else [settings.TOPCV_SEARCH_ENDPOINTS]
+        )
 
     async def crawl(self) -> List[JobItem]:
         """Scrape configured TopCV search endpoints using Playwright and return normalized JobItem objects."""
@@ -62,7 +67,7 @@ class TopCVCrawler:
             )
 
             try:
-                for endpoint in self.SEARCH_ENDPOINTS:
+                for endpoint in self.search_endpoints:
                     logger.info(f"[{self.name}] Crawling endpoint via browser: {endpoint}")
                     try:
                         response = await page.goto(

@@ -1,6 +1,6 @@
 # 🚀 Hanoi IT Job Radar Bot (Automation & Data Pipeline)
 
-Hệ thống tự động cào tin tuyển dụng lập trình viên (tập trung mảng **Java / Spring Boot / Backend** cấp bậc **Intern / Fresher**) tại khu vực **Hà Nội** từ 3 nguồn dữ liệu lớn: **ITviec**, **TopCV** và **Facebook Group**, sau đó lọc thông minh và gửi thông báo tức thì qua **Discord Webhook** và **Telegram Bot**.
+Hệ thống tự động cào tin tuyển dụng lập trình viên (Java, Backend, Frontend, DevOps, IT chung cấp bậc Intern / Fresher) tại khu vực Hà Nội từ 4 nguồn dữ liệu lớn: **ITviec**, **TopCV**, **JobsGO** và **Facebook Group**, sau đó lọc thông minh và gửi thông báo tức thì qua **Discord Webhook** và **Telegram Bot**.
 
 Dự án được thiết kế theo chuẩn **Production-grade (Clean Code, Modular Architecture, Async I/O, Error Resilient)**, sẵn sàng đóng gói Docker để vận hành 24/7 trên Ubuntu VPS.
 
@@ -24,19 +24,19 @@ Dự án được thiết kế theo chuẩn **Production-grade (Clean Code, Modu
 ## 🏛️ Kiến trúc hệ thống
 
 ```
-+--------------------------------------------------------------------------+
-|                        SCHEDULER (APScheduler / 15m)                     |
-+--------------------------------------------------------------------------+
-                                     │
-         ┌───────────────────────────┼───────────────────────────┐
-         ▼                           ▼                           ▼
- ┌───────────────┐           ┌───────────────┐           ┌───────────────┐
- │ ITViecCrawler │           │  TopCVCrawler │           │FBGroupCrawler │
- │(httpx + BS4)  │           │ (httpx + BS4) │           │  (Playwright) │
- └───────┬───────┘           └───────┬───────┘           └───────┬───────┘
-         │                           │                           │
-         └───────────────────────────┼───────────────────────────┘
-                                     ▼
++-----------------------------------------------------------------------------------+
+|                           SCHEDULER (APScheduler / 15m)                           |
++-----------------------------------------------------------------------------------+
+                                          │
+         ┌───────────────────┬────────────┴───────┬───────────────────┐
+         ▼                   ▼                    ▼                   ▼
+ ┌───────────────┐   ┌───────────────┐    ┌───────────────┐   ┌───────────────┐
+ │ ITViecCrawler │   │  TopCVCrawler │    │ JobGOCrawler  │   │FBGroupCrawler │
+ │ (httpx + BS4) │   │ (Playwright)  │    │ (Playwright)  │   │ (Playwright)  │
+ └───────┬───────┘   └───────┬───────┘    └───────┬───────┘   └───────┬───────┘
+         │                   │                    │                   │
+         └───────────────────┴────────────┬───────┴───────────────────┘
+                                          ▼
                        ┌───────────────────────────┐
                        │   Filter Engine (Rules)   │
                        │ - Tech: Java/Spring/BE    │

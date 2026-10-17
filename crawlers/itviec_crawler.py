@@ -4,6 +4,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from crawlers.base_crawler import BaseCrawler
+from config.settings import settings
 from models.job import JobItem
 from utils.logger import logger
 
@@ -15,17 +16,24 @@ class ITViecCrawler(BaseCrawler):
     SEARCH_ENDPOINTS = [
         "https://itviec.com/it-jobs/java/ha-noi",
         "https://itviec.com/it-jobs/backend/ha-noi",
+        "https://itviec.com/it-jobs/frontend/ha-noi",
+        "https://itviec.com/it-jobs/devops/ha-noi",
     ]
 
     def __init__(self):
         super().__init__(name="ITViec")
+        self.search_endpoints = (
+            settings.ITVIEC_SEARCH_ENDPOINTS
+            if isinstance(settings.ITVIEC_SEARCH_ENDPOINTS, list)
+            else [settings.ITVIEC_SEARCH_ENDPOINTS]
+        )
 
     async def crawl(self) -> List[JobItem]:
         """Scrape configured ITviec endpoints and return normalized JobItem objects."""
         jobs: List[JobItem] = []
         seen_urls: Set[str] = set()
 
-        for endpoint in self.SEARCH_ENDPOINTS:
+        for endpoint in self.search_endpoints:
             logger.info(f"[{self.name}] Crawling endpoint: {endpoint}")
             try:
                 html = await self.fetch(endpoint, referer="https://itviec.com/")
