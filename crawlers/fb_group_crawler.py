@@ -1,8 +1,9 @@
 import asyncio
 import hashlib
 import json
+import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 from datetime import datetime
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
@@ -132,9 +133,13 @@ class FBGroupCrawler:
                     logger.warning(f"[{self.name}] Could not add some cookies: {ex}")
 
             try:
+                seen_signatures: Set[str] = set()
+                seen_urls: Set[str] = set()
                 for group_url in self.group_urls:
                     try:
-                        group_jobs = await self._crawl_group(context, group_url.strip())
+                        group_jobs = await self._crawl_group(
+                            context, group_url.strip(), seen_signatures, seen_urls
+                        )
                         jobs.extend(group_jobs)
                         await asyncio.sleep(2.0)
                     except CookieAuthError:
@@ -155,8 +160,18 @@ class FBGroupCrawler:
         logger.info(f"[{self.name}] Total unique posts extracted: {len(jobs)}")
         return jobs
 
-    async def _crawl_group(self, context: BrowserContext, group_url: str) -> List[JobItem]:
+    async def _crawl_group(
+        self,
+        context: BrowserContext,
+        group_url: str,
+        seen_signatures: Optional[Set[str]] = None,
+        seen_urls: Optional[Set[str]] = None,
+    ) -> List[JobItem]:
         """Navigate to a Facebook Group URL and extract the newest job posts."""
+        if seen_signatures is None:
+            seen_signatures = set()
+        if seen_urls is None:
+            seen_urls = set()
         # Force Facebook to display posts chronologically (Newest first) instead of "Most Relevant"
         if "sorting_setting=" not in group_url:
             delimiter = "&" if "?" in group_url else "?"
@@ -318,9 +333,6 @@ class FBGroupCrawler:
                     f"Nội dung hiển thị trên trang: '{body_text}'"
                 )
 
-            seen_signatures = set()
-            seen_urls = set()
-
             for item in extracted_posts:
                 try:
                     post_text = item.get("text", "").strip()
@@ -337,15 +349,19 @@ class FBGroupCrawler:
                         text_hash = hashlib.md5(post_text[:120].encode("utf-8")).hexdigest()[:12]
                         post_url = f"{group_url.rstrip('/')}#post_{text_hash}"
 
-                    # Avoid duplicate posts within the same group feed
+                    # Avoid duplicate posts by URL across all groups in this cycle
                     if post_url in seen_urls:
                         continue
                     seen_urls.add(post_url)
 
-                    sig = post_text[:70].lower()
-                    if sig in seen_signatures:
+                    # Deduplicate by content signature across all groups in this cycle
+                    # (Prevents recruiter cross-posting spam to multiple groups)
+                    clean_sig = re.sub(r"[^\w\s]", "", post_text[:140].lower())
+                    clean_sig = re.sub(r"\s+", " ", clean_sig).strip()
+                    if clean_sig in seen_signatures:
+                        logger.debug(f"[{self.name}] Duplicate content skipped across groups: '{post_text[:50]}...'")
                         continue
-                    seen_signatures.add(sig)
+                    seen_signatures.add(clean_sig)
 
                     # Derive a clean title from the first non-empty lines
                     lines = [line.strip() for line in post_text.split("\n") if line.strip()]
@@ -353,7 +369,8 @@ class FBGroupCrawler:
                     if len(derived_title) > 90:
                         derived_title = derived_title[:87] + "..."
 
-                    post_id = hashlib.md5(f"fb:{post_url}".encode("utf-8")).hexdigest()
+                    # Deterministic post_id based on content signature (ensures cross-group and cross-cycle deduplication in SQLite)
+                    post_id = hashlib.md5(f"fb:{clean_sig}".encode("utf-8")).hexdigest()
 
                     job = JobItem(
                         job_id=post_id,
