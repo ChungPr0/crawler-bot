@@ -250,21 +250,25 @@ class FBGroupCrawler:
             # Extract posts with both content AND exact direct permalinks via browser DOM evaluation
             extracted_posts = await page.evaluate(r'''() => {
                 const results = [];
-                let articles = Array.from(document.querySelectorAll("div[role='feed'] > div, div[role='article']"));
-                if (articles.length === 0) {
-                    articles = Array.from(document.querySelectorAll("div[data-ad-preview='message'], div[data-ad-comet-preview='message']")).map(
-                        el => el.closest("div[role='feed'] > div") || el
-                    );
+                const feed = document.querySelector("div[role='feed']");
+                let postContainers = [];
+
+                if (feed) {
+                    // Only get direct children of the feed (each child is strictly ONE isolated post item)
+                    postContainers = Array.from(feed.children);
+                } else {
+                    // Fallback if role='feed' is not found
+                    postContainers = Array.from(document.querySelectorAll("div[role='article']"));
                 }
-                
-                articles.forEach(art => {
-                    // 1. Extract post text content
+
+                postContainers.forEach(container => {
+                    // 1. Extract post text strictly within this post container
                     let postText = '';
-                    const msgElem = art.querySelector("div[data-ad-preview='message'], div[data-ad-comet-preview='message']");
+                    const msgElem = container.querySelector("div[data-ad-preview='message'], div[data-ad-comet-preview='message']");
                     if (msgElem) {
                         postText = (msgElem.innerText || '').trim();
                     } else {
-                        const dirElements = art.querySelectorAll("div[dir='auto']");
+                        const dirElements = container.querySelectorAll("div[dir='auto']");
                         for (const d of dirElements) {
                             const t = (d.innerText || '').trim();
                             if (t.length >= 35) {
@@ -273,56 +277,54 @@ class FBGroupCrawler:
                             }
                         }
                     }
-                    
+
                     if (!postText || postText.length < 35) return;
 
                     // Clean out inline "Xem thêm" / "See more" fragments from text
                     postText = postText.replace(/Xem thêm/g, '').replace(/See more/g, '').trim();
                     if (postText.length < 35) return;
-                    
-                    // 2. Extract direct post permalink from all links within this article or ancestors up to feed
+
+                    // 2. Extract direct post permalink STRICTLY within this post container
+                    // DO NOT traverse outside container into parent feed (prevents leaking links from other posts above)
                     let postUrl = '';
-                    let curr = art;
-                    for (let level = 0; level < 12 && curr; level++) {
-                        const links = Array.from(curr.querySelectorAll("a[href]"));
-                        for (const a of links) {
-                            const href = a.href || '';
-                            // Direct group post: /groups/.../posts/<id>/, /permalink/<id>/, or share link /share/p/<id>/
-                            if (href.includes('/posts/') || href.includes('/permalink/') || href.includes('/share/p/') || href.includes('/share/g/')) {
-                                postUrl = href.split('?')[0].split('&')[0].split('#')[0];
+                    const links = Array.from(container.querySelectorAll("a[href]"));
+                    for (const a of links) {
+                        const href = a.href || '';
+                        // Direct group post: /groups/.../posts/<id>/, /permalink/<id>/, or share link /share/p/<id>/
+                        if (href.includes('/posts/') || href.includes('/permalink/') || href.includes('/share/p/') || href.includes('/share/g/')) {
+                            postUrl = href.split('?')[0].split('&')[0].split('#')[0];
+                            break;
+                        }
+                        if (href.includes('multi_permalinks=')) {
+                            const match = href.match(/multi_permalinks=([0-9]+)/);
+                            if (match) {
+                                postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
                                 break;
                             }
-                            if (href.includes('multi_permalinks=')) {
-                                const match = href.match(/multi_permalinks=([0-9]+)/);
-                                if (match) {
-                                    postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
-                                    break;
-                                }
-                            }
-                            if (href.includes('story_fbid=')) {
-                                const match = href.match(/story_fbid=([^&]+)/);
-                                if (match) {
-                                    postUrl = `https://www.facebook.com/permalink.php?story_fbid=${match[1]}`;
-                                    break;
-                                }
-                            }
-                            if (href.includes('set=gm.') || href.includes('set=pcb.')) {
-                                const match = href.match(/set=(?:gm|pcb)\.([0-9]+)/);
-                                if (match) {
-                                    postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
-                                    break;
-                                }
+                        }
+                        if (href.includes('story_fbid=')) {
+                            const match = href.match(/story_fbid=([^&]+)/);
+                            if (match) {
+                                postUrl = `https://www.facebook.com/permalink.php?story_fbid=${match[1]}`;
+                                break;
                             }
                         }
-                        if (postUrl) break;
-                        if (curr.getAttribute && curr.getAttribute('role') === 'feed') break;
-                        curr = curr.parentElement;
+                        if (href.includes('set=gm.') || href.includes('set=pcb.')) {
+                            const match = href.match(/set=(?:gm|pcb)\.([0-9]+)/);
+                            if (match) {
+                                postUrl = `https://www.facebook.com/groups/permalink/${match[1]}/`;
+                                break;
+                            }
+                        }
                     }
-                    
-                    results.push({
-                        text: postText,
-                        url: postUrl
-                    });
+
+                    // Only keep candidates that have their OWN direct post permalink inside their container
+                    if (postUrl) {
+                        results.push({
+                            text: postText,
+                            url: postUrl
+                        });
+                    }
                 });
                 return results;
             }''')
