@@ -15,7 +15,7 @@ Dự án được thiết kế theo chuẩn **Production-grade (Clean Code, Modu
    - [Tạo Telegram Bot & Lấy Chat ID](#2-tạo-telegram-bot--lấy-chat-id)
    - [Xuất Facebook Cookies](#3-xuất-facebook-cookies)
 5. [Cài đặt và chạy trên máy Local](#-cài-đặt-và-chạy-local)
-6. [Quản lý Bật / Tắt Bot đơn giản với bot.sh (Khuyên dùng)](#-quản-lý-bật--tắt-bot-đơn-giản-với-botsh-khuyên-dùng)
+6. [Quản lý Bot toàn hệ thống với crawlerbot](#-quản-lý-bot-toàn-hệ-thống-với-crawlerbot)
 7. [Triển khai chạy ngầm 24/7 trên Ubuntu VPS với Docker](#-triển-khai-production-trên-ubuntu-vps-với-docker)
 8. [Phương án triển khai thay thế bằng Systemd](#-phương-án-triển-khai-với-systemd-service)
 9. [Quản trị, Backup & Giám sát (Monitoring)](#-quản-trị--giám-sát)
@@ -107,8 +107,8 @@ crawler-bot/
 ├── docker-compose.yml           # Compose cấu hình volume, memory limit, auto restart
 ├── main.py                      # Điểm khởi chạy chính & Scheduler
 ├── requirements.txt             # Danh sách thư viện Python
-├── bot.sh                       # Script điều khiển Bật / Tắt / Xem log trên Linux VPS
-├── bot.bat                      # Script 1-Click tự động thiết lập & điều khiển trên Windows
+├── scripts/
+│   └── crawlerbot               # CLI điều khiển bot toàn hệ thống (start|stop|restart|status|logs)
 └── README.md                    # Tài liệu hướng dẫn sử dụng chi tiết
 ```
 
@@ -202,44 +202,21 @@ cp .env.example .env
 
 # 6. Khởi chạy hệ thống chính
 python main.py
-# (Hoặc trên Windows: chạy trực tiếp file .\bot.bat)
 ```
 
 ---
 
-## ⚡ Quản lý Bật / Tắt Bot đơn giản với bot.sh (Khuyên dùng)
+## ⚡ Quản lý Bot toàn hệ thống với `crawlerbot`
 
-Để thuận tiện nhất khi vận hành trên VPS mà không cần nhớ câu lệnh phức tạp, dự án tích hợp sẵn script điều khiển `bot.sh`.
+Công cụ `crawlerbot` được cài đặt tự động toàn hệ thống cho mọi tài khoản trên VPS qua CI/CD. Tại bất kỳ thư mục nào trên VPS, bạn chỉ cần sử dụng các lệnh sau:
 
-### Cách 1: Sử dụng Menu trực quan (Khuyên dùng)
-Chỉ cần chạy lệnh sau:
 ```bash
-chmod +x bot.sh
-./bot.sh
+crawlerbot start     # Khởi động bot
+crawlerbot stop      # Dừng bot (giải phóng RAM & CPU)
+crawlerbot restart   # Khởi động lại bot
+crawlerbot status    # Kiểm tra trạng thái hoạt động và mức RAM/CPU chiếm dụng
+crawlerbot logs      # Theo dõi trực tiếp nhật ký cào job (Ctrl+C để thoát)
 ```
-Màn hình sẽ hiển thị Menu điều khiển:
-* Bấm **1**: Bật bot chạy ngầm 24/7.
-* Bấm **2**: Tắt bot triệt để, dọn dẹp Chromium, giải phóng 100% RAM & CPU.
-* Bấm **3**: Khởi động lại bot.
-* Bấm **4**: Xem nhật ký cào tin theo thời gian thực (`tail -f`).
-* Bấm **5**: Kiểm tra trạng thái tiến trình, dung lượng RAM đang chiếm.
-* Bấm **6**: Cài đặt phím tắt `crawlerbot` toàn hệ thống.
-
-### Cách 2: Lệnh trực tiếp 1 dòng
-```bash
-./bot.sh start     # Bật bot chạy ngầm
-./bot.sh stop      # Tắt bot & giải phóng RAM
-./bot.sh status    # Kiểm tra trạng thái đang chạy hay đã tắt
-./bot.sh logs      # Xem log trực tiếp
-./bot.sh restart   # Khởi động lại
-```
-
-### Cài đặt phím tắt toàn hệ thống:
-Chạy lệnh:
-```bash
-sudo ./bot.sh install
-```
-Sau đó ở bất kỳ thư mục nào trên VPS bạn chỉ cần gõ `crawlerbot` (hoặc `crawlerbot start`, `crawlerbot stop`) mà không cần `cd /opt/crawler-bot`.
 
 ---
 

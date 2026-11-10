@@ -101,36 +101,13 @@ jobs:
             echo "==> [4/5] Don dep image cu de giai phong o cung VPS..."
             docker image prune -f
 
-            echo "==> [5/5] Cai dat cong cu dieu khien crawlerbot toan he thong..."
-            docker cp hanoi-it-job-radar:/app/scripts/crawlerbot /tmp/crawlerbot || true
-            if [ -f /tmp/crawlerbot ]; then
-              # 1. Cai dat vao thu muc nguoi dung (~/.local/bin) khong can mat khau sudo
-              BIN_DIR="$HOME/.local/bin"
-              mkdir -p "$BIN_DIR"
-              cp /tmp/crawlerbot "$BIN_DIR/crawlerbot"
-              chmod +x "$BIN_DIR/crawlerbot"
-
-              # 2. Cau hinh PATH va alias trong ~/.bashrc de chay duoc tu moi noi
-              touch "$HOME/.bashrc"
-              if ! grep -q 'HOME/.local/bin' "$HOME/.bashrc" 2>/dev/null; then
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-              fi
-              if ! grep -q 'alias crawlerbot=' "$HOME/.bashrc" 2>/dev/null; then
-                echo 'alias crawlerbot="$HOME/.local/bin/crawlerbot"' >> "$HOME/.bashrc"
-              fi
-
-              # 3. Neu he thong cho phep sudo khong can mat khau, cai them vao /usr/local/bin
-              if sudo -n true 2>/dev/null; then
-                sudo cp /tmp/crawlerbot /usr/local/bin/crawlerbot 2>/dev/null || true
-                sudo chmod +x /usr/local/bin/crawlerbot 2>/dev/null || true
-                sudo ln -sf /usr/local/bin/crawlerbot /usr/bin/crawlerbot 2>/dev/null || true
-              fi
-
-              rm -f /tmp/crawlerbot
-              echo "==> Da cai dat thanh cong lenh 'crawlerbot'."
-            else
-              echo "==> Canh bao: Khong tim thay /app/scripts/crawlerbot trong container."
-            fi
+            echo "==> [5/5] Cai dat cong cu dieu khien crawlerbot toan he thong cho tat ca user..."
+            docker run --rm \
+              -v /usr/local/bin:/host_local_bin \
+              -v /usr/bin:/host_usr_bin \
+              "${IMAGE_NAME}:latest" \
+              sh -c "cp /app/scripts/crawlerbot /host_local_bin/crawlerbot && chmod 755 /host_local_bin/crawlerbot && ln -sf /usr/local/bin/crawlerbot /host_usr_bin/crawlerbot 2>/dev/null || true"
+            echo "==> Da cai dat thanh cong lenh 'crawlerbot' toan he thong cho moi user."
 
             echo "==> DEPLOY HOAN TAT! Kiem tra container sau 5s:"
             sleep 5

@@ -34,7 +34,6 @@ cmd_start() {
         echo "[SUCCESS] Service started successfully."
     else
         echo "[ERROR] Container '$CONTAINER_NAME' does not exist."
-        echo "        Please trigger CI/CD deployment or run container initialization."
         return 1
     fi
 }
@@ -82,53 +81,6 @@ cmd_logs() {
     $DOCKER_CMD logs -f --tail 50 "$CONTAINER_NAME"
 }
 
-cmd_menu() {
-    while true; do
-        clear 2>/dev/null || true
-        cmd_status
-        echo ""
-        echo "Available Actions:"
-        echo "  [1] Start Service    (crawlerbot start)"
-        echo "  [2] Stop Service     (crawlerbot stop)"
-        echo "  [3] Restart Service  (crawlerbot restart)"
-        echo "  [4] Stream Logs      (crawlerbot logs)"
-        echo "  [5] Refresh Status   (crawlerbot status)"
-        echo "  [0] Exit"
-        echo "----------------------------------------------------------"
-        read -r -p "Enter selection [0-5]: " choice
-        case "$choice" in
-            1)
-                echo ""
-                cmd_start
-                read -r -p "Press Enter to continue..." _
-                ;;
-            2)
-                echo ""
-                cmd_stop
-                read -r -p "Press Enter to continue..." _
-                ;;
-            3)
-                echo ""
-                cmd_restart
-                read -r -p "Press Enter to continue..." _
-                ;;
-            4)
-                echo ""
-                cmd_logs
-                ;;
-            5)
-                ;;
-            0|q|Q)
-                exit 0
-                ;;
-            *)
-                echo "Invalid selection. Please choose [0-5]."
-                sleep 1
-                ;;
-        esac
-    done
-}
-
 case "$1" in
     start)
         cmd_start
@@ -144,9 +96,6 @@ case "$1" in
         ;;
     logs|log)
         cmd_logs
-        ;;
-    "")
-        cmd_menu
         ;;
     *)
         echo "Usage: crawlerbot {start|stop|restart|status|logs}"
