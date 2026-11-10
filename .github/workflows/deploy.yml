@@ -98,8 +98,130 @@ jobs:
               --log-opt max-file=3 \
               "${IMAGE_NAME}:latest"
 
-            echo "==> [4/4] Don dep image cu de giai phong o cung VPS..."
+            echo "==> [4/5] Don dep image cu de giai phong o cung VPS..."
             docker image prune -f
+
+            echo "==> [5/5] Cai dat cong cu dieu khien crawlerbot toan he thong..."
+            cat << 'CRAWLERBOT_EOF' > /tmp/crawlerbot
+#!/usr/bin/env bash
+CONTAINER="hanoi-it-job-radar"
+
+get_status() {
+    if [ "$(docker ps -q -f name=^/${CONTAINER}$)" ]; then
+        echo "running"
+    elif [ "$(docker ps -a -q -f name=^/${CONTAINER}$)" ]; then
+        echo "stopped"
+    else
+        echo "not_found"
+    fi
+}
+
+start_bot() {
+    local st
+    st=$(get_status)
+    if [ "$st" = "running" ]; then
+        echo "⚠️  CrawlerBot ĐANG CHẠY RỒI!"
+    elif [ "$st" = "stopped" ]; then
+        echo "🚀 Đang khởi động CrawlerBot ($CONTAINER)..."
+        docker start "$CONTAINER" >/dev/null
+        echo "✅ BẬT BOT THÀNH CÔNG! Bot đang chạy ngầm 24/7."
+    else
+        echo "⚠️ Không tìm thấy container $CONTAINER."
+    fi
+}
+
+stop_bot() {
+    local st
+    st=$(get_status)
+    if [ "$st" = "running" ]; then
+        echo "🛑 Đang tắt CrawlerBot ($CONTAINER)..."
+        docker stop "$CONTAINER" >/dev/null
+        echo "✅ ĐÃ TẮT BOT HOÀN TOÀN! 100% RAM & CPU đã được giải phóng."
+    else
+        echo "ℹ️  CrawlerBot HIỆN ĐANG TẮT. Không tốn RAM nào."
+    fi
+}
+
+restart_bot() {
+    echo "🔄 Đang khởi động lại CrawlerBot..."
+    docker restart "$CONTAINER" >/dev/null
+    echo "✅ Khởi động lại thành công!"
+}
+
+show_status() {
+    local st
+    st=$(get_status)
+    if [ "$st" = "running" ]; then
+        echo "🟢 Trạng thái: ĐANG CHẠY"
+        docker stats --no-stream --format "   • RAM sử dụng: {{.MemUsage}}\n   • CPU sử dụng: {{.CPUPerc}}\n   • Net I/O:     {{.NetIO}}" "$CONTAINER"
+    elif [ "$st" = "stopped" ]; then
+        echo "🔴 Trạng thái: ĐÃ TẮT (Container đang STOP, không tốn RAM/CPU)"
+    else
+        echo "⚪ Trạng thái: Container chưa được tạo"
+    fi
+}
+
+show_logs() {
+    echo "📄 Đang xem log trực tiếp (Nhấn Ctrl + C để thoát)..."
+    docker logs -f --tail 50 "$CONTAINER"
+}
+
+menu() {
+    while true; do
+        clear 2>/dev/null || true
+        echo "=========================================================="
+        echo "       🤖 HANOI IT JOB RADAR - ĐIỀU KHIỂN CRAWLERBOT      "
+        echo "=========================================================="
+        show_status
+        echo "----------------------------------------------------------"
+        echo "  [1] 🚀 BẬT BOT (crawlerbot start)"
+        echo "  [2] 🛑 TẮT BOT (crawlerbot stop - giải phóng RAM)"
+        echo "  [3] 🔄 Khởi động lại (crawlerbot restart)"
+        echo "  [4] 📄 Xem log trực tiếp (crawlerbot logs)"
+        echo "  [5] 📊 Kiểm tra trạng thái & RAM chi tiết"
+        echo "  [0] 🚪 Thoát"
+        echo "=========================================================="
+        read -r -p "👉 Nhập lựa chọn của bạn [0-5]: " choice
+        case "$choice" in
+            1) start_bot; read -r -p "Nhấn Enter để tiếp tục..." _ ;;
+            2) stop_bot;  read -r -p "Nhấn Enter để tiếp tục..." _ ;;
+            3) restart_bot; read -r -p "Nhấn Enter để tiếp tục..." _ ;;
+            4) show_logs ;;
+            5) show_status; read -r -p "Nhấn Enter để tiếp tục..." _ ;;
+            0|q|Q) exit 0 ;;
+        esac
+    done
+}
+
+case "$1" in
+    start)    start_bot ;;
+    stop)     stop_bot ;;
+    restart)  restart_bot ;;
+    status)   show_status ;;
+    logs|log) show_logs ;;
+    "")       menu ;;
+    *)
+        echo "Sử dụng:"
+        echo "  crawlerbot          -> Mở Menu điều khiển"
+        echo "  crawlerbot start    -> Bật bot"
+        echo "  crawlerbot stop     -> Tắt bot (giải phóng RAM)"
+        echo "  crawlerbot restart  -> Khởi động lại bot"
+        echo "  crawlerbot status   -> Xem trạng thái & RAM"
+        echo "  crawlerbot logs     -> Xem log trực tiếp"
+        exit 1
+        ;;
+esac
+CRAWLERBOT_EOF
+
+            if command -v sudo >/dev/null 2>&1; then
+              sudo mv /tmp/crawlerbot /usr/local/bin/crawlerbot
+              sudo chmod +x /usr/local/bin/crawlerbot
+              sudo ln -sf /usr/local/bin/crawlerbot /usr/bin/crawlerbot 2>/dev/null || true
+            else
+              mv /tmp/crawlerbot /usr/local/bin/crawlerbot
+              chmod +x /usr/local/bin/crawlerbot
+              ln -sf /usr/local/bin/crawlerbot /usr/bin/crawlerbot 2>/dev/null || true
+            fi
 
             echo "==> DEPLOY HOAN TAT! Kiem tra container sau 5s:"
             sleep 5
