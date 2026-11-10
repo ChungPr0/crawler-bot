@@ -106,12 +106,12 @@ stop_bot() {
     local pid
     pid=$(get_bot_pid)
     if [ -z "$pid" ]; then
-        echo "ℹ️  Bot HIỆN ĐANG TẮT. Không có tiến trình nào cần dừng."
+        echo "[INFO] Hanoi IT Job Radar service is currently stopped."
         rm -f "$PID_FILE"
         return 0
     fi
 
-    echo "🛑 Đang dừng bot (PID: $pid)..."
+    echo "[INFO] Stopping Hanoi IT Job Radar service (PID: $pid)..."
     kill "$pid" 2>/dev/null
 
     # Chờ tối đa 8 giây để tắt êm
@@ -125,19 +125,19 @@ stop_bot() {
 
     # Nếu vẫn chưa tắt thì ép dừng
     if kill -0 "$pid" 2>/dev/null; then
-        echo "⚠️  Tiến trình chưa tắt kịp, đang buộc dừng (SIGKILL)..."
+        echo "[WARN] Process did not terminate gracefully. Sending SIGKILL..."
         kill -9 "$pid" 2>/dev/null
     fi
 
-    # Dọn dẹp tiến trình Playwright Chromium mồ côi (nếu có)
+    # Dọn dẹp tiến trình Playwright Chromium nếu có
     pkill -9 -f "chrome-linux/chrome" 2>/dev/null || true
     pkill -9 -f "chromium" 2>/dev/null || true
     rm -f "$PID_FILE"
 
     echo "=========================================================="
-    echo "  🛑 ĐÃ TẮT BOT HOÀN TOÀN!"
-    echo "  • Toàn bộ RAM & CPU đã được giải phóng 100%."
-    echo "  • Khi nào cần dùng lại, chỉ cần gõ: ./bot.sh start"
+    echo "  [SUCCESS] Hanoi IT Job Radar service stopped."
+    echo "  • Status: STOPPED"
+    echo "  • To start again: ./bot.sh start"
     echo "=========================================================="
 }
 
@@ -191,8 +191,8 @@ interactive_menu() {
         echo "=========================================================="
         check_status
         echo "----------------------------------------------------------"
-        echo "  [1] 🚀 BẬT BOT (Chạy ngầm 24/7)"
-        echo "  [2] 🛑 TẮT BOT (Giải phóng 100% RAM & CPU)"
+        echo "  [1] 🚀 BẬT BOT (Khởi động bot)"
+        echo "  [2] 🛑 TẮT BOT (Dừng bot)"
         echo "  [3] 🔄 Khởi động lại bot"
         echo "  [4] 📄 Xem log cào việc thời gian thực"
         echo "  [5] 📊 Kiểm tra trạng thái chi tiết"
