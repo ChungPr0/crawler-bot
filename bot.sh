@@ -167,16 +167,18 @@ install_shortcut() {
         echo "   Vui lòng chạy: sudo ./bot.sh install"
         return 1
     fi
-    ln -sf "$APP_DIR/bot.sh" /usr/local/bin/bot
-    chmod +x "$APP_DIR/bot.sh" /usr/local/bin/bot
+    # Xóa symlink cũ nếu có để tránh xung đột
+    rm -f /usr/local/bin/bot /usr/local/bin/crawlerbot
+    ln -sf "$APP_DIR/bot.sh" /usr/local/bin/crawlerbot
+    chmod +x "$APP_DIR/bot.sh" /usr/local/bin/crawlerbot
     echo "=========================================================="
-    echo "  ✅ ĐÃ CÀI ĐẶT LỆNH 'bot' TOÀN HỆ THỐNG!"
+    echo "  ✅ ĐÃ CÀI ĐẶT LỆNH 'crawlerbot' TOÀN HỆ THỐNG!"
     echo "  Từ bây giờ, ở bất kỳ đâu trên VPS bạn chỉ cần gõ:"
-    echo "    • bot          -> Mở menu điều khiển"
-    echo "    • bot start    -> Bật bot"
-    echo "    • bot stop     -> Tắt bot"
-    echo "    • bot status   -> Xem trạng thái"
-    echo "    • bot logs     -> Xem log"
+    echo "    • crawlerbot          -> Mở menu điều khiển"
+    echo "    • crawlerbot start    -> Bật bot"
+    echo "    • crawlerbot stop     -> Tắt bot"
+    echo "    • crawlerbot status   -> Xem trạng thái"
+    echo "    • crawlerbot logs     -> Xem log"
     echo "=========================================================="
 }
 
@@ -194,7 +196,7 @@ interactive_menu() {
         echo "  [3] 🔄 Khởi động lại bot"
         echo "  [4] 📄 Xem log cào việc thời gian thực"
         echo "  [5] 📊 Kiểm tra trạng thái chi tiết"
-        echo "  [6] ⚡ Cài đặt phím tắt 'bot' toàn hệ thống"
+        echo "  [6] ⚡ Cài đặt phím tắt 'crawlerbot' toàn hệ thống"
         echo "  [0] 🚪 Thoát"
         echo "=========================================================="
         read -r -p "👉 Nhập lựa chọn của bạn [0-6]: " choice
@@ -264,7 +266,7 @@ case "$1" in
         echo "  ./bot.sh restart   -> Khởi động lại bot"
         echo "  ./bot.sh status    -> Kiểm tra trạng thái bot"
         echo "  ./bot.sh logs      -> Xem log trực tiếp"
-        echo "  ./bot.sh install   -> Cài lệnh tắt 'bot' vào hệ thống"
+        echo "  ./bot.sh install   -> Cài lệnh tắt 'crawlerbot' vào hệ thống"
         ;;
     "")
         interactive_menu

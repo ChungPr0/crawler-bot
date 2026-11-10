@@ -223,7 +223,7 @@ Màn hình sẽ hiển thị Menu điều khiển:
 * Bấm **3**: Khởi động lại bot.
 * Bấm **4**: Xem nhật ký cào tin theo thời gian thực (`tail -f`).
 * Bấm **5**: Kiểm tra trạng thái tiến trình, dung lượng RAM đang chiếm.
-* Bấm **6**: Cài đặt phím tắt `bot` toàn hệ thống.
+* Bấm **6**: Cài đặt phím tắt `crawlerbot` toàn hệ thống.
 
 ### Cách 2: Lệnh trực tiếp 1 dòng
 ```bash
@@ -239,7 +239,7 @@ Chạy lệnh:
 ```bash
 sudo ./bot.sh install
 ```
-Sau đó ở bất kỳ thư mục nào trên VPS bạn chỉ cần gõ `bot` (hoặc `bot start`, `bot stop`) mà không cần `cd /opt/crawler-bot`.
+Sau đó ở bất kỳ thư mục nào trên VPS bạn chỉ cần gõ `crawlerbot` (hoặc `crawlerbot start`, `crawlerbot stop`) mà không cần `cd /opt/crawler-bot`.
 
 ---
 
