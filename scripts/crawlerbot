@@ -6,12 +6,20 @@ set -e
 
 CONTAINER_NAME="hanoi-it-job-radar"
 
+# Auto-detect docker execution permissions
+DOCKER_CMD="docker"
+if ! docker ps >/dev/null 2>&1; then
+    if command -v sudo >/dev/null 2>&1 && sudo docker ps >/dev/null 2>&1; then
+        DOCKER_CMD="sudo docker"
+    fi
+fi
+
 is_container_running() {
-    [ -n "$(docker ps -q -f name=^/${CONTAINER_NAME}$)" ]
+    [ -n "$($DOCKER_CMD ps -q -f name=^/${CONTAINER_NAME}$)" ]
 }
 
 is_container_existing() {
-    [ -n "$(docker ps -a -q -f name=^/${CONTAINER_NAME}$)" ]
+    [ -n "$($DOCKER_CMD ps -a -q -f name=^/${CONTAINER_NAME}$)" ]
 }
 
 cmd_start() {
@@ -22,7 +30,7 @@ cmd_start() {
 
     if is_container_existing; then
         echo "[INFO] Starting Hanoi IT Job Radar service..."
-        docker start "$CONTAINER_NAME" >/dev/null
+        $DOCKER_CMD start "$CONTAINER_NAME" >/dev/null
         echo "[SUCCESS] Service started successfully."
     else
         echo "[ERROR] Container '$CONTAINER_NAME' does not exist."
@@ -38,13 +46,13 @@ cmd_stop() {
     fi
 
     echo "[INFO] Stopping Hanoi IT Job Radar service..."
-    docker stop "$CONTAINER_NAME" >/dev/null
+    $DOCKER_CMD stop "$CONTAINER_NAME" >/dev/null
     echo "[SUCCESS] Service stopped successfully."
 }
 
 cmd_restart() {
     echo "[INFO] Restarting Hanoi IT Job Radar service..."
-    docker restart "$CONTAINER_NAME" >/dev/null
+    $DOCKER_CMD restart "$CONTAINER_NAME" >/dev/null
     echo "[SUCCESS] Service restarted successfully."
 }
 
@@ -56,7 +64,7 @@ cmd_status() {
         echo "Status: RUNNING (Active)"
         echo ""
         echo "Resource Utilization:"
-        docker stats --no-stream --format "  • Memory: {{.MemUsage}}\n  • CPU:    {{.CPUPerc}}\n  • Net IO: {{.NetIO}}" "$CONTAINER_NAME"
+        $DOCKER_CMD stats --no-stream --format "  • Memory: {{.MemUsage}}\n  • CPU:    {{.CPUPerc}}\n  • Net IO: {{.NetIO}}" "$CONTAINER_NAME"
     elif is_container_existing; then
         echo "Status: STOPPED (Inactive)"
     else
@@ -71,7 +79,7 @@ cmd_logs() {
         return 1
     fi
     echo "[INFO] Streaming service logs (Press Ctrl+C to detach)..."
-    docker logs -f --tail 50 "$CONTAINER_NAME"
+    $DOCKER_CMD logs -f --tail 50 "$CONTAINER_NAME"
 }
 
 cmd_menu() {

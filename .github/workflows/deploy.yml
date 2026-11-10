@@ -70,16 +70,16 @@ jobs:
             APP_DIR="/opt/crawler-bot"
             IMAGE_NAME="${IMAGE_NAME:-ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')}"
 
-            echo "==> [1/4] Truy cap thu muc $APP_DIR..."
+            echo "==> [1/5] Truy cap thu muc $APP_DIR..."
             cd "$APP_DIR"
 
-            echo "==> [2/4] Dang nhap GHCR va keo Docker Image da build san ve VPS..."
+            echo "==> [2/5] Dang nhap GHCR va keo Docker Image da build san ve VPS..."
             if [ -n "$GITHUB_TOKEN" ]; then
               echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin || true
             fi
             docker pull "${IMAGE_NAME}:latest"
 
-            echo "==> [3/4] Khoi dong lai Container voi gioi han RAM & Swap an toan..."
+            echo "==> [3/5] Khoi dong lai Container voi gioi han RAM & Swap an toan..."
             docker stop hanoi-it-job-radar || true && docker rm hanoi-it-job-radar || true
 
             docker run -d \
